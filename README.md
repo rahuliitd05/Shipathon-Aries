@@ -1,3 +1,15 @@
+---
+title: FactCheck AI
+emoji: 🔍
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: 1.28.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🔍 FactCheck AI
 
 An advanced AI-powered fact-checking system that verifies claims using **Natural Language Inference (NLI)**, **semantic similarity**, and **multi-source evidence gathering**.
@@ -309,6 +321,61 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📧 Contact
 
 For questions or feedback, please open an issue on GitHub.
+
+---
+
+## 🚀 Deployment
+
+### Option 1: Hugging Face Spaces (Recommended for ML apps)
+
+1. Create a [Hugging Face account](https://huggingface.co/join)
+2. Create a new Space: https://huggingface.co/new-space
+3. Select **Streamlit** as the SDK
+4. Clone your space and copy project files:
+   ```bash
+   git clone https://huggingface.co/spaces/YOUR_USERNAME/factcheck-ai
+   cd factcheck-ai
+   # Copy all project files here
+   ```
+5. Add the HF Space header to your README.md:
+   ```yaml
+   ---
+   title: FactCheck AI
+   emoji: 🔍
+   colorFrom: blue
+   colorTo: green
+   sdk: streamlit
+   sdk_version: 1.28.0
+   app_file: app.py
+   pinned: false
+   ---
+   ```
+6. Push to deploy:
+   ```bash
+   git add .
+   git commit -m "Deploy FactCheck AI"
+   git push
+   ```
+
+### Option 2: Streamlit Cloud
+
+1. Push your code to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Click "New app"
+4. Select your repository and `app.py`
+5. Click "Deploy"
+
+> ⚠️ Note: Free tier has 1GB RAM limit. Large models may cause memory issues.
+
+### Option 3: Railway
+
+1. Create account at [railway.app](https://railway.app)
+2. Connect your GitHub repository
+3. Add a `Procfile`:
+   ```
+   web: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+   ```
+4. Deploy
 
 ---
 
