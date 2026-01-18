@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import re
+import subprocess
+import sys
 
 # Try to import duckduckgo_search, fallback gracefully
 try:
@@ -20,14 +22,22 @@ except ImportError:
     DDGS_AVAILABLE = False
     print("⚠️ duckduckgo-search not installed. DuckDuckGo search disabled.")
 
-# Load spaCy model once
+# Load spaCy model - auto-download if not available
+nlp = None
 try:
     nlp = spacy.load("en_core_web_sm")
-except:
+except OSError:
+    print("📥 Downloading spaCy model (en_core_web_sm)...")
     try:
-        import en_core_web_sm
-        nlp = en_core_web_sm.load()
-    except:
+        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+        nlp = spacy.load("en_core_web_sm")
+        print("✅ spaCy model downloaded successfully!")
+    except Exception as e:
+        print(f"⚠️ Could not download spaCy model: {e}")
+        try:
+            import en_core_web_sm
+            nlp = en_core_web_sm.load()
+        except:
         nlp = None
         print("⚠️ spaCy model not found. Entity extraction disabled.")
 
