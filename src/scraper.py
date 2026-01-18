@@ -5,14 +5,11 @@ Supports: Wikipedia, DuckDuckGo, Google Fact Check API, News Sources
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus, urljoin
-import spacy
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import re
-import subprocess
-import sys
 
 # Try to import duckduckgo_search, fallback gracefully
 try:
@@ -22,24 +19,15 @@ except ImportError:
     DDGS_AVAILABLE = False
     print("⚠️ duckduckgo-search not installed. DuckDuckGo search disabled.")
 
-# Load spaCy model - auto-download if not available
+# Try to load spaCy (optional - will use regex fallback if not available)
 nlp = None
 try:
+    import spacy
     nlp = spacy.load("en_core_web_sm")
-except OSError:
-    print("📥 Downloading spaCy model (en_core_web_sm)...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
-        nlp = spacy.load("en_core_web_sm")
-        print("✅ spaCy model downloaded successfully!")
-    except Exception as e:
-        print(f"⚠️ Could not download spaCy model: {e}")
-        try:
-            import en_core_web_sm
-            nlp = en_core_web_sm.load()
-        except:
-        nlp = None
-        print("⚠️ spaCy model not found. Entity extraction disabled.")
+    print("✅ spaCy model loaded successfully!")
+except Exception as e:
+    print(f"ℹ️ spaCy not available, using regex-based entity extraction. ({e})")
+    nlp = None
 
 
 @dataclass
@@ -65,28 +53,76 @@ HEADERS = {
 }
 
 
+def extract_entities_regex(text: str) -> List[Dict]:
+    """
+    Extract entities using regex patterns (fallback when spaCy is not available)
+    """
+    entities = []
+    
+    # Find quoted strings
+    quoted = re.findall(r'"([^"]+)"', text)
+    for q in quoted:
+        entities.append({"text": q, "label": "QUOTED"})
+    
+    # Find capitalized multi-word phrases (e.g., "Barack Obama", "United States")
+    cap_phrases = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
+    for phrase in cap_phrases:
+        if phrase not in [e['text'] for e in entities]:
+            entities.append({"text": phrase, "label": "PERSON_OR_PLACE"})
+    
+    # Find single capitalized words that might be proper nouns
+    stop_words = {'the', 'is', 'was', 'are', 'were', 'has', 'have', 'had', 'been', 
+                  'will', 'would', 'could', 'should', 'may', 'might', 'must',
+                  'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom',
+                  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'his', 'her'}
+    
+    words = text.split()
+    for i, word in enumerate(words):
+        clean_word = word.strip('.,!?()[]"\'')
+        if (clean_word and clean_word[0].isupper() and 
+            len(clean_word) > 2 and 
+            clean_word.lower() not in stop_words and
+            i > 0):  # Skip first word (sentence start)
+            if clean_word not in [e['text'] for e in entities]:
+                entities.append({"text": clean_word, "label": "PROPER_NOUN"})
+    
+    # Find years (useful for historical claims)
+    years = re.findall(r'\b(1[0-9]{3}|20[0-2][0-9])\b', text)
+    for year in years:
+        entities.append({"text": year, "label": "DATE"})
+    
+    # Find numbers with context
+    numbers = re.findall(r'\b(\d+(?:\.\d+)?)\s*(million|billion|trillion|percent|%|km|miles|years)?\b', text, re.IGNORECASE)
+    for num, unit in numbers:
+        if unit:
+            entities.append({"text": f"{num} {unit}", "label": "QUANTITY"})
+    
+    return entities[:10]  # Limit to top 10 entities
+
+
 def get_entities(text: str) -> List[Dict]:
     """
-    Extract named entities from text using spaCy
+    Extract named entities from text using spaCy or regex fallback
     """
-    if nlp is None:
-        # Fallback: extract quoted terms and capitalized words
-        entities = []
-        # Find quoted strings
-        quoted = re.findall(r'"([^"]+)"', text)
-        for q in quoted:
-            entities.append({"text": q, "label": "GENERIC"})
-        # Find capitalized words (potential proper nouns)
-        words = text.split()
-        for word in words:
-            if word[0].isupper() and len(word) > 2 and word.lower() not in ['the', 'is', 'was', 'are', 'were', 'has', 'have', 'had']:
-                entities.append({"text": word.strip('.,!?'), "label": "GENERIC"})
-        return entities[:5] if entities else [{"text": text, "label": "GENERIC"}]
+    if nlp is not None:
+        # Use spaCy for better entity extraction
+        try:
+            doc = nlp(text)
+            entities = []
+            for ent in doc.ents:
+                entities.append({"text": ent.text, "label": ent.label_})
+            if entities:
+                return entities
+        except Exception as e:
+            print(f"spaCy error: {e}")
     
-    doc = nlp(text)
-    entities = []
-    for ent in doc.ents:
-        entities.append({"text": ent.text, "label": ent.label_})
+    # Fallback to regex-based extraction
+    entities = extract_entities_regex(text)
+    
+    # If still no entities, use the whole claim
+    if not entities:
+        entities = [{"text": text, "label": "GENERIC"}]
+    
     return entities
 
 
