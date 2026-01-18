@@ -1,2 +1,0 @@
-# System packages for HF Spaces
-# spaCy model will be installed via Python
